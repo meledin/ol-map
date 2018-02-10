@@ -1,0 +1,35 @@
+{
+  "name": "ol-map",
+  "version": "1.0",
+  "authors": [
+    "Vladimir Katardjiev <github@onetime.d2dx.com>"
+  ],
+  "description": "OpenLayers library for Polymer 2.0. API-compatible with ol-map for Polymer 1.0 by Fabian Bormann",
+  "keywords": [
+    "web-component",
+    "polymer",
+    "osm"
+  ],
+  "main": "ol-map.html",
+  "license": "https://raw.githubusercontent.com/meledin/ol-map/master/LICENSE",
+  "homepage": "https://github.com/meledin/ol-map",
+  "ignore": [
+    "/.*",
+    "/test/"
+  ],
+  "dependencies": {
+    "polymer": "Polymer/polymer#^2.0.0",
+    "iron-resizable-behavior": "PolymerElements/iron-resizable-behavior",
+    "openlayers": "https://github.com/openlayers/openlayers/releases/download/v4.6.4/v4.6.4-dist.zip"
+  },
+  "devDependencies": {
+    "iron-component-page": "PolymerElements/iron-component-page#^3.0.0"
+  },
+  "resolutions": {
+    "polymer": "^2.0.0",
+    "iron-component-page": "^3.0.0",
+    "webcomponentsjs": "^1.0.19",
+    "iron-doc-viewer": "^3.0.0",
+    "iron-location": "1 - 2"
+  }
+}

@@ -1,0 +1,130 @@
+<link rel="import" href="../polymer/polymer.html">
+
+<script>
+    'use strict';
+    (function() {
+
+        /**
+         * All OpenLayers Polymer wrappers.
+         */
+        window.OpenLayers = window.OpenLayers || {};
+
+
+        var hexMatch = /^#(?:[a-fA-F0-9]{3}){1,2}$/i;
+
+        /**
+        Generic drawable superclass
+        */
+        OpenLayers.Drawable = class extends Polymer.mixinBehaviors([], Polymer.Element) {
+            static get is() { return "ol-drawable"; }
+            static get properties() {
+                return {
+                    /**
+                     * The z-index to render this element on. This affects layer order.
+                     */
+                    zIndex: {
+                        type: Number,
+                        value: 0,
+                        observer: '_setZIndex'
+                    },
+                    layer: {
+                        type: Object,
+                        observer: '_wrapLayer'
+                    },
+                    hidden: {
+                        type: Boolean,
+                        observer: '_hide'
+                    },
+                    _color: {
+                        type: String
+                    }
+                }
+            }
+            
+            static get observers() {
+                return ['_setColor(color)'];
+            }
+
+            _wrapLayer(layer) {
+                layer.setZIndex(this.zIndex);
+                layer.setVisible(!this.hidden);
+                layer._elt = this;
+            }
+            
+            _hide() {
+                if (this.layer) {
+                    this.layer.setVisible(!this.hidden);
+                    this.layer.changed()
+                }
+            }
+                
+            _setColor(color) {
+                this._color = color;
+            }
+
+
+            /**
+            Convert the given OpenLayers drawable definition to a layer that will be added to the map.
+            */
+            _toLayer() {
+                throw "This method must be implemented (or this item isn't _really_ drawable)";
+            }
+
+
+            /**
+             * Converts hex, opacity to rgba.
+             *
+             * Supports regular hexadecimal, as well as shorthand. Code adapted from https://stackoverflow.com/a/44870045
+             */
+            _makeRgba(color, opacity) {
+                                
+                if (color == null)
+                    return 'rgba(0,0,0,0)';
+                
+                if (color.indexOf('rgba') == 0)
+                    return color;
+                
+                if (hexMatch.exec(color) == null) {
+                    console.debug("The specified string [" + color + "] is not in hexadecimal form for a color.");
+                    return "rgba(0,0,0,1)";
+                }
+                var hex = color.replace('#', '');
+                var r = parseInt(hex.length == 3 ? hex.slice(0, 1).repeat(2) : hex.slice(0, 2), 16);
+                var g = parseInt(hex.length == 3 ? hex.slice(1, 2).repeat(2) : hex.slice(2, 4), 16);
+                var b = parseInt(hex.length == 3 ? hex.slice(2, 3).repeat(2) : hex.slice(4, 6), 16);
+                
+                return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + opacity + ')';
+            }
+
+            _makeProjected(lon, lat) {
+                return ol.proj.fromLonLat([lon, lat]);
+            }
+
+            _makeGps(lon, lat) {
+                return ol.proj.toLonLat([lon, lat]);
+            }
+
+            _setZIndex(idx) {
+                if (this.layer)
+                    this.layer.setZIndex(idx);
+            }
+
+            _sendOnClick(event, feature) {
+                this._debounceSendOnClick = Polymer.Debouncer.debounce(this._debounceSendOnClick, Polymer.Async.microTask, () => { 
+                    this.dispatchEvent(new CustomEvent('click', {
+                        bubbles: true,
+                        detail: {
+                            feature: feature,
+                            event: event,
+                            layer: this.layer,
+                            elt: this
+                        }
+                    }));
+                });
+            }
+
+        }
+
+    })();
+
+</script>

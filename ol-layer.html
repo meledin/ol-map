@@ -1,0 +1,79 @@
+<link rel="import" href="ol-base.html">
+
+<!--
+The `ol-layer` element customises the base OpenLayers Map layer, e.g. to load tiles from a custom tile server.
+
+#### Example
+
+<ol-map>
+  <ol-layer url="http://my.tileserver.net"></ol-layer>
+</ol-map>
+
+@demo demo/index.html
+-->
+
+<dom-module id="ol-layer">
+    <script>
+        OpenLayers.Layer = class extends OpenLayers.Drawable {
+
+            static get is() { return 'ol-layer' };
+            static get properties() {
+                return {
+                    hidden: {
+                        type: Boolean,
+                        value: false
+                    },
+                    preload: {
+                        type: Number,
+                        value: 0
+                    },
+                    source: {
+                        type: String,
+                        value: 'osm'
+                    },
+                    maxZoom: {
+                        type: Number,
+                        value: 19
+                    },
+                    cacheSize: {
+                        type: Number,
+                        value: 2048
+                    },
+                    url: {
+                        type: String
+                    }
+                }
+            }
+            
+            _isReady() {
+                return true;
+            }
+
+            _toLayer() {
+                if (this.layer)
+                    return this.layer;
+                
+                if (this.source == "osm") {
+                    this.layer = new ol.layer.Tile({
+                        visible: !this.hidden,
+                        preload: this.preload,
+                        source: new ol.source.OSM({
+                            maxZoom: this.maxZoom,
+                            url: this.url,
+                            cacheSize: this.cacheSize,
+                            crossOrigin: null
+                        }),
+                        zIndex: this.zIndex
+                    });
+                    return this.layer;
+
+                } else {
+
+                }
+            }
+
+        }
+        window.customElements.define(OpenLayers.Layer.is, OpenLayers.Layer);
+
+    </script>
+</dom-module>

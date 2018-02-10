@@ -1,0 +1,91 @@
+<link rel="import" href="ol-base.html">
+
+<!--
+`ol-point` signifies a point on the map. In and of itself, this is a useless element. It can be used inside an `<ol-line>`, for example,
+ to draw a line on the map.
+-->
+
+<dom-module id="ol-point">
+    <script>
+        'use strict';
+        (function() {
+
+            OpenLayers.Point = class extends OpenLayers.Drawable {
+
+                static get is() { return 'ol-point' ;}
+                static get properties() {
+                    return {
+                        /**
+                         * Latitude coordinate of this point, in EPSG4326/WSG84
+                         * 
+                         * The current latitude of this point. Can update in case of mutable points.
+                         */
+                        latitude: {
+                            type: Number,
+                            value: 37.69011641462609,
+                            notify: true,
+                            reflectToAttribute: true
+                        },
+
+                        /**
+                         * Longitude coordinate of this point, in EPSG4326/WSG84
+                         * 
+                         * The current longitude of this point. Can update in case of mutable points.
+                         */
+                        longitude: {
+                            type: Number,
+                            value: -121.92280558023066,
+                            notify: true,
+                            reflectToAttribute: true
+                        },
+
+                        /**
+                         * Position representation of this point, in map coordinates (NOT lon-lat)
+                         */
+                        projected: {
+                            type: Array,
+                            computed: '_makeProjected(longitude, latitude)',
+                            notify: true
+                        },
+
+                        /**
+                         * A hexadecimal color specification for the point.
+                         *
+                         * The color's usage depends on the target. For example, an `ol-line` may choose to use it as the stroke color for a segment.
+                         */
+                        color: {
+                            type: String,
+                            value: "#FF0000",
+                            observer: '_setColor'
+                        },
+
+                        /**
+                         * Opacity of the point.
+                         *
+                         * Similar to `color`, the opacity's meaning depends on the enclosing element's interpretation.
+                         */
+                        opacity: {
+                            type: Number,
+                            value: 1,
+                            notify: true,
+                            reflectToAttribute: true
+                        },
+
+                        /**
+                         * rgba representation of the color and opacity; readonly.
+                         */
+                        rgba: {
+                            type: String,
+                            computed: '_makeRgba(_color, opacity)',
+                            notify: true
+                        }
+                    }
+                }
+
+            }
+
+            window.customElements.define(OpenLayers.Point.is, OpenLayers.Point);
+
+        })();
+    </script>
+</dom-module>

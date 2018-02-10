@@ -1,0 +1,197 @@
+<link rel="import" href="ol-base.html">
+<link rel="import" href="ol-point.html">
+
+
+<dom-module id="ol-line">
+    <template>
+        <style>
+            :host {
+                display: none;
+            }
+        </style>
+        <slot id="content"></slot>
+    </template>
+    <script>
+        'use strict';
+        (function() {
+
+            var hexMatch = /^#(?:[a-fA-F0-9]{3}){1,2}$/i;
+
+
+            /**
+            `ol-line` wraps around OpenLayers LineString element, allowing the drawing of one or more lines.
+            
+            
+
+            @customElement
+            @polymer
+            */
+            OpenLayers.Line = class extends OpenLayers.Drawable {
+
+                static get is() { return 'ol-line' ;}
+                static get properties() {
+                    return {
+
+                        /**
+                         * Opacity of the line as a whole.
+                         *
+                         * This opacity is applied on top of each individual line segment (if applicable)
+                         */
+                        opacity: {
+                            type: Number,
+                            value: 1,
+                            notify: true,
+                            reflectToAttribute: true,
+                            observer: '_updateOpacity'
+                        },
+
+                        /**
+                         * Opacity of the line as a whole.
+                         *
+                         * This opacity is applied on top of each individual line segment (if applicable)
+                         */
+                        color: {
+                            type: String,
+                            value: 1,
+                            notify: true,
+                            reflectToAttribute: true
+                        },
+
+                        width: {
+                            type: Number,
+                            value: 4
+                        },
+
+                        layer: {
+                            type: Object
+                        },
+                        
+                        lineDash: {
+                            type: Array
+                        }
+
+                    }
+                }
+                
+                static get observers() {
+                    return ['_updateChildColors(_color)'];
+                }
+
+                ready() {
+                    super.ready();
+                    this._layerDomObserver = new Polymer.FlattenedNodesObserver(this.$.content, this._refreshLine.bind(this));
+                    this._childRefreshLine = this._refreshLine.bind(this);
+                    this._childRefreshColor = this._handleColorChange.bind(this);
+                    if (this.layer)
+                        this._refreshLine();
+                }
+
+                /**
+                 * Creates a layer for the line drawing.
+                 *
+                 * The layer consists of individual vectors for each line segment.
+                 */
+                _toLayer() {
+                    if (!this.layer) {
+                        this.source = new ol.source.Vector({features: []});
+                        this.layer = new ol.layer.Vector({
+                            style: new ol.style.Style({
+                                stroke: new ol.style.Stroke({
+                                    width: this.width
+                                })
+                            }),
+                            source: this.source,
+                            zIndex: this.zIndex,
+                            opacity: this.opacity
+                        });
+                    }
+                    this._refreshLine();
+                    return this.layer;
+                }
+
+                _refreshLine() {
+                    this._refreshLineDebounce = Polymer.Debouncer.debounce(this._refreshLineDebounce, Polymer.Async.microTask, this._doRefreshLine.bind(this)); 
+                }
+
+                _doRefreshLine() {
+
+                    if (!this.layer || !this.$ || !this.$.content)
+                        return;
+
+                    // We'll be looking through all the children.
+                    var children = Polymer.FlattenedNodesObserver.getFlattenedNodes(this.$.content).filter(n => n instanceof OpenLayers.Point);
+                    children.forEach(this._bindChildListeners.bind(this));
+
+                    // Cannot render a line with less than two points.
+                    if (children.length < 2)
+                        return; 
+
+                    // Convert the children into pairs of LineString geometries and features
+                    var last = children[0];
+                    var features = [];
+
+                    for (var i=1; i < children.length; i++) {
+                        var curr = children[i];
+                        var geometry = new ol.geom.LineString([last.projected, curr.projected]);
+                        var feature = new ol.Feature({
+                            geometry: geometry
+                        });
+
+                        // Calculate the style.
+                        feature.setStyle(new ol.style.Style({
+                            stroke: new ol.style.Stroke({
+                                color: this._colorForChild(curr),
+                                width: this.width,
+                                lineDash: this.lineDash
+                            })
+                        }));
+                        curr._feature = feature;
+                        curr._source = this.source;
+
+                        features.push(feature);
+                        last = curr;
+                    }
+
+                    // After retrieving all the features, we toss them over to the layer's data source.
+                    this.source.clear();
+                    this.source.addFeatures(features);
+                    self.ft = this.source;
+
+                }
+
+                _updateChildColors() {
+                    Polymer.FlattenedNodesObserver.getFlattenedNodes(this.$.content).filter(n => n instanceof OpenLayers.Point).forEach(this._handleColorChange.bind(this));
+                }
+
+                _colorForChild(child) {
+                    return typeof(this._color) == "string" ? this._makeRgba(this._color, child.opacity) : child.rgba;
+                }
+
+                _handleColorChange(e) {
+                    var child = e.target || e;
+                    if (!child || !child._feature)
+                        return;
+                    child._feature.getStyle().getStroke().setColor(this._colorForChild(child));
+                    child._feature.changed();
+                }
+
+                _bindChildListeners(child) {
+                    child.removeEventListener('rgba-changed', this._childRefreshColor);
+                    child.removeEventListener('projected-changed', this._childRefreshLine);
+
+                    child.addEventListener('rgba-changed', this._childRefreshColor);
+                    child.addEventListener('projected-changed', this._childRefreshLine);
+                }
+
+                _updateOpacity(val) {
+                    if (this.layer)
+                        this.layer.setOpacity(val);
+                }
+
+            }
+
+            window.customElements.define(OpenLayers.Line.is, OpenLayers.Line);
+
+        })();
+    </script>
+</dom-module>

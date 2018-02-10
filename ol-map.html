@@ -1,0 +1,327 @@
+<link rel="import" href="ol-base.html">
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../polymer/lib/utils/debounce.html">
+
+<link rel="import" href="../iron-resizable-behavior/iron-resizable-behavior.html">
+<link rel="import" href="ol-layer.html">
+<link rel="stylesheet" href="../openlayers/ol.css" type="text/css">
+<script src="../openlayers/ol-debug.js"></script>
+
+<dom-module id="ol-map">
+    <template>
+        <style>
+            :host {
+                display: block;
+            }
+
+            #map {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+            }
+
+            [hidden] {
+                display: none;
+            }
+        </style>
+        <div id="map" class="map"></div>
+        <div hidden>
+            <slot id="content"></slot>
+        </div>
+    </template>
+
+    <script>
+        'use strict';
+        /**
+         * Creates a base map layer. The simplest version of this instantiates a zoomable map using OpenStreetMap's servers.
+         *
+         * As OSM servers are not meant for production use, it's recommended to use a custom server. `<ol-layer>` can be used
+         * to point the tiles layer to a custom location, and the other elements in this collection can be used to draw on the map.
+         *
+         * @customElement
+         * @polymer
+         * @demo demos/ol-map.html
+         */
+        OpenLayers.Map = class extends Polymer.mixinBehaviors([Polymer.IronResizableBehavior], Polymer.Element) {
+            static get is() { return 'ol-map'; }
+            static get properties() {
+                return {
+                    /**
+                     * Map center latitude.
+                     * 
+                     * Mutable value that reflects the current map center's latitude. Will update at the *end* of user interactions.
+                     */
+                    latitude: {
+                        type: Number,
+                        value: 37.69011641462609,
+                        notify: true,
+                        reflectToAttribute: true
+                    },
+                    /**
+                     * Map center longitude.
+                     * 
+                     * Mutable value that reflects the current map center's longitude. Will update at the *end* of user interactions.
+                     */
+                    longitude: {
+                        type: Number,
+                        value: -121.92280558023066,
+                        notify: true,
+                        reflectToAttribute: true
+                    },
+                    /**
+                     * Map zoom level. Greater values are more detailed.
+                     * 
+                     * Will update at the *end* of user interactions.
+                     */
+                    zoom: {
+                        type: Number,
+                        value: 9,
+                        notify: true,
+                        reflectToAttribute: true,
+                        observer: 'setZoom'
+                    },
+                    /**
+                     * Whether to animate the map while longitude/latitude change.
+                     */
+                    animate: {
+                        type: Boolean,
+                        value: false
+                    },
+                    /**
+                     * If animating, the number of milliseconds the animation should take.
+                     */
+                    animateDuration: {
+                        type: Number,
+                        value: 500
+                    },
+                    
+                    /**
+                     * Center of the map projection. Primarily used internally.
+                     */
+                    center: {
+                        type: Array,
+                        computed: '_calculateCenter(longitude, latitude)',
+                        observer: '_updateCenter'
+                    },
+
+                    /**
+                     * Underlying OpenLayers Map object. Can be used to access the map and use
+                     * the raw OpenLayers JS API for anything the wrapper is unable to do.
+                     **/ 
+                    map: {
+                        type: Object,
+                        readOnly: true,
+                        notify: true
+                    }
+                };
+            }
+
+            static get listeners() { 
+                return {
+                    'iron-resize': 'resize'
+                };
+            }
+
+            resize() {
+                this.map && this.map.updateSize();
+            }
+
+            setZoom(level) {
+                this._updateCenter();
+                //this.map && this.map.getView().setZoom(level);
+            }
+
+
+            ready() {
+                super.ready();
+                var map = new ol.Map({
+                    interactions: ol.interaction.defaults({mouseWheelZoom: false}).extend([
+                        new ol.interaction.MouseWheelZoom({
+                            constrainResolution: false // force zooming to a integer zoom
+                        })
+                    ]),
+                    layers: this.layers,
+                    target: this.$.map,
+                    controls: ol.control.defaults({
+                        attributionOptions: ({collapsible: false})
+                    }),
+                    view: new ol.View({
+                        zoom: this.zoom,
+                        center: ol.proj.fromLonLat([this.longitude, this.latitude])
+                    }),
+                    loadTilesWhileAnimating: !this.noLoadTilesWhileAnimating,
+                    loadTilesWhileInteracting: !this.noLoadTilesWhileInteracting
+                });
+                
+                // Use the "read"-only setter
+                this._setMap(map);
+
+                this.map.on('click', event => {
+                    var layer = null, feature = null;
+                    this.map.forEachFeatureAtPixel(event.pixel, (f, l) => {
+                        feature = f; layer = l;
+                    }, {hitTolerance: 3});
+                    // TODO: fire a generic click on the map?
+                    if (layer && layer._elt)
+                        layer._elt._sendOnClick(event, feature);
+                });
+
+                // Upon opening, rework any and all attached layers.
+                setTimeout(() => this._refreshLayers());
+
+                // Bind future DOM updates
+                this._layerDomObserver = new Polymer.FlattenedNodesObserver(this.$.content, this._refreshLayers.bind(this));
+
+                // Refresh map properties on change.
+                this.map.getView().on('change', () => {
+                    this._mapChange = true;
+                    var center = ol.proj.toLonLat(this.map.getView().getCenter());
+                    this.longitude = center[0];
+                    this.latitude = center[1];
+                    this.zoom = this.map.getView().getZoom();
+                    this._mapChange = false;
+                });
+
+                self.mapDbg = this.map;
+
+                // This timeout disables animations for the initial load.
+                setTimeout(() => this._inited = true, 100);
+                setTimeout(() => this.resize(), 100);
+
+            }
+
+            /**
+            Attempts to fit the map's contents (the extents of all layers combined) in the map view.
+            
+This is a convenience method that attempts to pan/zoom the map to fit everything drawn. The `opts`
+parameter is passed through to the wrapped OpenLayers object.
+@param [opts] Pass-through options to OpenLayers.
+            */
+            fit(opts) {
+                //Create an empty extent that we will gradually extend
+                var extent = ol.extent.createEmpty();
+                opts = opts || {};
+
+                this.map.getLayers().forEach(function(layer) {
+                    //If this is actually a group, we need to create an inner loop to go through its individual layers
+                    if(layer instanceof ol.layer.Group) {
+                        layer.getLayers().forEach(function(groupLayer) {
+                            //If this is a vector layer, add it to our extent
+                            if(layer instanceof ol.layer.Vector)
+                                ol.extent.extend(extent, groupLayer.getSource().getExtent());
+                        });
+                    }
+                    else if(layer instanceof ol.layer.Vector)
+                        ol.extent.extend(extent, layer.getSource().getExtent());
+                });
+
+                //Finally fit the map's view to our combined extent
+                opts.size = this.map.getSize();
+                if (this.animate && !opts.duration)
+                    opts.duration = this.animateDuration;
+                this.map.getView().fit(extent, opts);
+            }
+
+            _refreshLayers() {
+                if (!this.map) return;
+                this._debounceJob = Polymer.Debouncer.debounce(this._debounceJob, Polymer.Async.microTask, () => { 
+
+                    // Reset all layers (TODO: Cache layer values and/or deal with a diff)
+                    var layers = [];
+
+                    // We'll be looking through all the children.
+                    var children = Polymer.FlattenedNodesObserver.getFlattenedNodes(this.$.content).filter(n => n.nodeType === Node.ELEMENT_NODE);
+
+                    // Catch: If all children have z-index == 0 (i.e. the user is not managing z-index), give them a z-index based on child node ordering.
+                    var zIndex = true;
+                    children.filter(c => c instanceof OpenLayers.Drawable).forEach(child => zIndex &= child.zIndex === 0);
+
+                    // Starting with layers.
+                    let layerElements = children.filter(c => c instanceof OpenLayers.Layer);
+                                        
+                    // Ensure all the layers are ready to convert. Otherwise wait for them to call us back.
+                    if (layerElements.every(elt => elt._isReady(() => this._refreshLayers())))
+                        layerElements.map(layer => layer._toLayer()).forEach(layer => layers.push(layer));
+                    else {
+                        return;
+                    }
+
+                    // Catch: Default layer (if-none-else)
+                    if (layers.length <= 0) {
+                        layers.push(this._makeDefaultTileLayer());
+                    }
+
+                    // And then all other content.
+                    children.filter(c => c instanceof OpenLayers.Drawable && !(c instanceof OpenLayers.Layer)).forEach(drawable => layers.push(drawable._toLayer()));
+
+                    if (zIndex) {
+                        for (var i=0; i < layers.length; i++)
+                            layers[i].setZIndex(i);
+                    }
+
+                    try {
+                        var existing = this.map.getLayers();
+                        var existingArray = existing.getArray();
+
+                        // Add new layers
+                        layers.filter(layer => !existingArray.includes(layer)).forEach(layer => this.map.addLayer(layer));
+                        existingArray.filter(layer => !layers.includes(layer)).forEach(layer => this.map.removeLayer(layer));
+
+                    }
+                    catch(e) {
+                        console.log(e.stack);
+                    }
+                });
+
+            }
+            
+            /**
+             * Creates a "default" tile layer.
+             *
+             * When a map layer isn't included explicitly, a default backing needs to be added.
+             * This method allows custom ol-map subclasses to specify their own defaults. This method
+             * is *not* intended for regular usage; to customise the tile layers, use the `<ol-layer>` element.
+             */
+            _makeDefaultTileLayer() {
+                return new ol.layer.Tile({source: new ol.source.OSM()});
+            }
+
+            // These two methods bind long/lat to update the map
+            _calculateCenter(longitude, latitude) {
+                return [Number(longitude), Number(latitude)];
+            }
+            _updateCenter(center) {
+                if (this._mapChange)
+                    return;
+                this._updateCenterDebounce = Polymer.Debouncer.debounce(this._updateCenterDebounce, Polymer.Async.microTask, () => { 
+                    if (this.map) {
+                        if (this.animate && this._inited) {
+                            if (!this.animating) {
+                                this.animating = true;
+                                var lon = this.longitude;
+                                var lat = this.latitude;
+                                var zoom = this.zoom;
+                                this.map.getView().animate({
+                                    center: ol.proj.fromLonLat(this.center),
+                                    zoom: this.zoom,
+                                    duration: this.animateDuration
+                                }, () => { 
+                                    this.animating = false;
+                                    if (this.latitude != lat || this.longitude != lon || this.zoom != zoom)
+                                        this._updateCenter();
+                                });
+                            }
+                        } else {
+                            this.map.getView().setCenter(ol.proj.fromLonLat(this.center));
+                            this.map.getView().setZoom(this.zoom);
+                        }
+                    }
+                });
+            }
+        };
+
+        window.customElements.define(OpenLayers.Map.is, OpenLayers.Map);
+
+
+    </script>
+</dom-module>

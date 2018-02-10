@@ -1,0 +1,60 @@
+<link rel="import" href="ol-marker.html">
+
+
+<dom-module id="ol-marker-circle">
+
+    <script>
+        'use strict';
+        (function() {
+
+            /**
+            Specify a circle
+            
+            @polymer
+            @customElement
+            */
+            OpenLayers.Marker.Circle = class extends OpenLayers.Marker {
+
+                static get is() { return 'ol-marker-circle' ;}
+                static get properties() {
+                    return {
+                        radius: {
+                            type: Number,
+                            observer: '_updateRadius'
+                        },
+                        center: {
+                            type: Object,
+                            computed: '_calculateCenter(longitude, latitude)',
+                            observer: '_updateCenter'
+                        }
+                    }
+                }
+
+                _toFeatures() {
+                    this._circle = new ol.geom.Circle(this._calculateCenter(this.longitude, this.latitude), this.radius);
+                    return [new ol.Feature({
+                        geometry: this._circle
+                    })];
+                }
+                
+                _updateRadius() {
+                    if (this._circle)
+                        this._circle.setRadius(this.radius);
+                }
+                
+                _calculateCenter(longitude, latitude) {
+                    return ol.proj.fromLonLat([this.longitude, this.latitude]);
+                }
+                
+                _updateCenter() {
+                    if (this._circle)
+                        this._circle.setCenter(this.center);
+                }
+
+            }
+
+            window.customElements.define(OpenLayers.Marker.Circle.is, OpenLayers.Marker.Circle);
+
+        })();
+    </script>
+</dom-module>

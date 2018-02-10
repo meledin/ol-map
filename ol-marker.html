@@ -1,0 +1,125 @@
+<link rel="import" href="ol-base.html">
+<link rel="import" href="ol-point.html">
+
+
+<dom-module id="ol-marker">
+
+    <script>
+        'use strict';
+        (function() {
+
+            /**
+            Specify a marker
+            
+            @polymer
+            @customElement
+            */
+            OpenLayers.Marker = class extends OpenLayers.Point {
+
+                static get is() { return 'ol-marker' ;}
+                static get properties() {
+                    return {
+                        scale: {
+                            type: Number,
+                            notify: true,
+                            value: 1
+                        },
+                        name: {
+                            type: String,
+                            value: "Unnamed Point"
+                        },
+                        stroke: {
+                            type: String,
+                            value: "#000000"
+                        },
+                        strokeWidth: {
+                            type: Number,
+                            value: 0
+                        }
+                    }
+                }
+                
+                static get observers() {
+                    return [
+                        "_updateStyle(rgba, stroke, strokeWidth)"
+                    ];
+                }
+                
+                _toFeatures() {
+                    return [new ol.Feature({
+                        geometry: new ol.geom.Point(ol.proj.fromLonLat([this.longitude, this.latitude]))
+                    })];
+                }
+                
+                _toStyle() {
+                    if (!this._style)
+                        this._style = new ol.style.Style();
+                    
+                    this._style.setFill(new ol.style.Fill({color: this.rgba}));
+                    
+                    if (this.strokeWidth) {
+                        this._style.setStroke(new ol.style.Stroke({color: this.stroke, width: this.strokeWidth}));
+                    }
+                    else
+                        this._style.setStroke(null);
+                    
+                    return this._style;
+                }
+                
+                _updateStyle() {
+                    if (!this.layer)
+                        return;
+                    
+                    this._toStyle();
+                    this.layer.changed();
+                }
+
+                _toLayer() {
+                    
+                    if (this.layer)
+                        return this.layer;
+                    
+                    /*let features = this._toFeatures();
+
+                    var iconFeatures = [];
+
+                    var iconFeature = new ol.Feature({
+                        //geometry: new ol.geom.Circle(ol.proj.fromLonLat([this.longitude, this.latitude]), 255),
+                        geometry: new ol.geom.Point(ol.proj.fromLonLat([this.longitude, this.latitude]))
+                    });
+
+                    iconFeatures.push(iconFeature);*/
+
+                    let source = new ol.source.Vector({ features: this._toFeatures() });
+                    let style = this._toStyle();
+
+                    /*var iconStyle = new ol.style.Style({
+                        fill: new ol.style.Fill({color: "#FF00FF"}),
+                        stroke: new ol.style.Stroke({color: "#FF0000", width: 1})
+                    });
+                    
+                    new ol.style.Style({
+                        image: new ol.style.Icon(({
+                            anchor: [0.5, 1],
+                            anchorXUnits: 'fraction',
+                            anchorYUnits: 'fraction',
+                            scale: this.scale,
+                            src: "//dev.openlayers.org/img/marker.png"
+                        }))
+                    });*/
+
+                    this.layer = new ol.layer.Vector({
+                        source: source,
+                        style: style,
+                        zIndex: this.zIndex
+                    });
+                    return this.layer;
+                }
+
+            }
+
+            window.customElements.define(OpenLayers.Marker.is, OpenLayers.Marker);
+
+        })();
+    </script>
+</dom-module>

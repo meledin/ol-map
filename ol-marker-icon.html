@@ -1,0 +1,67 @@
+<link rel="import" href="ol-marker.html">
+
+
+<dom-module id="ol-marker-icon">
+
+    <script>
+        'use strict';
+        (function() {
+
+            /**
+            Specify a marker
+            
+            @polymer
+            @customElement
+            */
+            OpenLayers.Marker.Icon = class extends OpenLayers.Marker {
+
+                static get is() { return 'ol-marker-icon' ;}
+                static get properties() {
+                    return {
+                        src: {
+                            type: String,
+                            value: '//dev.openlayers.org/img/marker.png',
+                            observer: '_updateStyle'
+                        },
+                        
+                        anchor: {
+                            type: Array,
+                            value: () => [0.5, 1],
+                            observer: '_updateStyle'
+                        }
+                    }
+                }
+
+                _toStyle() {
+                    if (!this._style) {
+                        this._style = new ol.style.Style();
+                        this._updateStyle();
+                    }
+                    
+                    return this._style;
+                }
+                
+                _updateStyle() {
+                    
+                    if (!this._style)
+                        return;
+                    
+                    this._style.setImage(new ol.style.Icon({
+                            anchor: this.anchor,
+                            anchorXUnits: 'fraction',
+                            anchorYUnits: 'fraction',
+                            scale: this.scale,
+                            src: this.src
+                    }));
+                    
+                    if (this.layer)
+                        this.layer.changed();
+                }
+
+            }
+
+            window.customElements.define(OpenLayers.Marker.Icon.is, OpenLayers.Marker.Icon);
+
+        })();
+    </script>
+</dom-module>
